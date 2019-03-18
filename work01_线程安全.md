@@ -7,9 +7,9 @@
 
 #### 2. 线程安全定义
 
-> 当多个线程访问某个类时，这个类始终能够表现正确的行为，那么就称这个类是线程安全的
+并发编程在带来优势的同时也引入了更为复杂的问题，那就是如何保证多线程并发访问共享数据时的线程安全：
 
-上面是[《Java并发编程实战》](https://book.douban.com/subject/10484692/) 中对线程安全的定义。通俗点讲就是在多线程程序中，对于可被多个线程访问的共享数据的操作始终是按照我们设定的方式进行的，不会出现意料之外的错误的情况。
+> 线程安全是计算机多线程编程中的概念。线程安全的代码确保所有线程在访问共享数据时能够正常运行，并且完全按照其设计的意图执行，不会出现任何意外的情况。当多个线程访问某个类时，这个类始终能够表现正确的行为，那么就称这个类是线程安全的。
 
 ***编写线程安全的代码核心在于要对状态访问操作进行管理，特别是对共享的和可变的状态的访问。***
 
@@ -28,7 +28,9 @@
 因此只要确保上面提到的问题被解决，就可以保证并发编程时线程的安全性了。
 
 
-#### 1. 线程封闭
+既然线程安全问题来源于数据的共享和变化，那么避免这两种情况就可以保证线程安全了。
+
+#### 1. 线程封闭 - 关闭共享特点
 
 ##### 【1】重入锁
 
@@ -37,15 +39,14 @@
 - 局部变量
 - Thread Local
 -
-#### 2. 不可变对象
+#### 2. 不可变对象 - 关闭可变特性
 
 
-
-
-#### 2. 一些问题
-
-##### 【1】32 位系统的long、double 类型
 ### 三. 锁
+
+上面提到的两种方式是通过改变数据特性的方式来保证线程安全，但是总有一个数据的可以被多线程访问、修改的，针对这些数据就得采用其他方式来保证线程安全性了，最常用的方式就是：***锁***。
+
+通过锁将某段代码加锁，表示该段代码在同一时间只能由一个线程访问，其他线程必须等待当前线程释放锁后才可以再次获取锁并执行代码。
 
 ### 四. 线程对性能的影响
 
@@ -164,7 +165,7 @@ public class AttrStore{
 
 ##### 【4】使用更友好的方式管理共享数据
 
-上面提到的方式都可以视为独占锁，那么是锁分段，也只是将锁控制的数据范围变小，其依然是独占锁。
+上面提到的方式都可以视为独占锁，j即使是锁分段，也只是将锁控制的数据范围变小，其依然是独占锁。
 
 一种更加友好的、降低锁竞争的方式是放弃使用独占锁，转而使用其他的友好并发方式来管理，此时有如下几种选择:
 
@@ -180,6 +181,8 @@ public class AttrStore{
 原子变量将获取锁的粒度缩小到单个变量，这是我们可以获得的最小粒度的锁。
 
 ### 四. Java 中的线程安全类
+
+下面看 Java 中一些线程安全类的实现，其思路都是基于前面提到的知识点的。
 
 #### 1. Thread Local  - 实现线程封闭
 
@@ -352,7 +355,7 @@ static class SynchronizedCollection<E> implements Collection<E>, Serializable {
         
 }
 ```
-Segment 中封装了一个 HashEntry<K,V>[] table 对象，HashEntry 就是 Map 中存储键值对的对象，Java1.7 通过在 Segment 中封装 table，从而将对整个 Map 的读写转为对 Segment 内部 table 数组的读写，因为 Segment 本身就是自带锁的，因此是线程安全的。那么由此可以想到，ConcurrentHashMap 的读写就是：
+Segment 中封装了一个 HashEntry<K,V>[] table 对象，HashEntry 就是 Map 中存储键值对的对象，Java1.7 通过在 Segment 中封装 table 数组，从而将对整个 Map 的读写转为对 Segment 内部 table 数组的读写，因为 Segment 本身就是自带锁的，因此是线程安全的。那么由此可以想到，ConcurrentHashMap 的读写就是：
 
 - 1. 初始化 ConcurrentHashMap 的 Segment 分段
 - 2. 找到对应的 Segment 段
@@ -591,10 +594,14 @@ public class CopyOnWriteArrayList<E>
 ### 五. Go 语言的并发编程
 
 
-
 ***参考资料***
 
 - [《Java 并发编程实战》](https://book.douban.com/subject/10484692/)
+- 极客时间专栏 [Java 并发编程实战](https://time.geekbang.org/column/intro/159)
 - [维基百科: Thread safety ](https://en.wikipedia.org/wiki/Thread_safety)
 - [CoolShell: 无锁队列的实现](https://coolshell.cn/articles/8239.html)
+- [设计不使用互斥锁的并发数据结构](https://www.ibm.com/developerworks/cn/aix/library/au-multithreaded_structures2/index.html)
 - [ConcurrentHashMap原理分析（1.7与1.8）](https://www.cnblogs.com/study-everyday/p/6430462.html)
+- JDK 1.7、1.8 源码
+- [《Go 语言学习笔记》](https://book.douban.com/subject/26832468/)
+- [Effective Go](https://golang.org/doc/effective_go.html#concurrency)
