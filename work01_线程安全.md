@@ -775,6 +775,4 @@ T Stack<T>::pop( )
 - [设计不使用互斥锁的并发数据结构](https://www.ibm.com/developerworks/cn/aix/library/au-multithreaded_structures2/index.html)
 - [ConcurrentHashMap原理分析（1.7与1.8）](https://www.cnblogs.com/study-everyday/p/6430462.html)
 - JDK 1.7、1.8 源码
-- [《Go 语言学习笔记》](https://book.douban.com/subject/26832468/)
-- [Effective Go](https://golang.org/doc/effective_go.html#concurrency)
 - [并发编程网](http://ifeve.com/)
