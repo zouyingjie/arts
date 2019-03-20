@@ -1,12 +1,5 @@
 ### 一. 何谓线程安全
 
-#### 1. 并发编程的好处
-
-
-
-#### 2. 线程安全定义
-
-
 随着硬件和互联网的发展，很多程序经常需要面对过百万级甚至更高的并发访问量，因此并发编程越来越成为一项必备的要求，并发编程可以带来一些好处：
 
 - 对于异步性的操作，可以在阻塞时优先执行其他任务，提高了程序的整体执行效率
@@ -31,7 +24,6 @@
 - 同步：线程之间的同步、协作
 
 因此只要确保上面提到的问题被解决，就可以保证并发编程时线程的安全性了。
-
 
 既然线程安全问题来源于数据的共享和变化，那么避免这两种情况就可以保证线程安全了。
 
@@ -634,37 +626,145 @@ public class CopyOnWriteArrayList<E>
 
 可以看到 CopyOnWriteArrayList 内置了一个 ReentrantLock，其读取操作是不加锁的，而对于 add、set、remove、clear、sort 等写操作，均通过try-finally 块的形式进行了加锁与锁的释放。另外内置数组是 volatile 类型，保证了写入操作后对于其他读操作的可见性。这样通过只对写加锁，避免了标准互斥锁会引发的 "读-读" 冲突，当 List 读多写少时可以极大提高其性能，
 
-### 五. 无锁机制
+### 五. 无锁机制简记
 
-#### 1. Java 中的 volatile 变量与原子变量
+无锁机制，主要是基于 CAS (Compare And Swap) 操作来实现的，其借用了 CPU 的原子指令实现数据修改。
+CAS 直译过来就是比较与交换，在设置某个值之前，先判断当前值是否有效，有效的话则执行交换操作。
 
-##### 【1】volatile 变量
+类似的操作还有：
 
-***优点***
+```C
+// 引用皓叔《无锁队列设计》中的代码：
+// 返回旧的值
+int compare_and_swap (int* reg, int oldval, int newval)
+{
+  int old_reg_val = *reg;
+  if (old_reg_val == oldval)
+     *reg = newval;
+  return old_reg_val;
+}
 
-- volatile 变量用来确保将变量的更新操作通知到其他线程。
-- 可以简单的理解为 volatile 的读写操作都是原子的，但是不会执行加锁操作。
+// 返回是否交换成功，可以用来判断是否设置成功
+bool compare_and_swap (int *accum, int *dest, int newval)
+{
+  if ( *accum == *dest ) {
+      *dest = newval;
+      return true;
+  }
+  return false;
+}
+```
 
-***应用场景***
+下面是 CAS 应用的一些简单的例子：
 
-- 变量的写入不依赖当前值
-- 在访问变量时不需要加锁
-- 该变量不会与其他变量一起纳入不变形条件中
+#### 1. 原子变量
 
-***局限性***
+Java 中的原子变量就是基于 CAS 实现安全更新操作的。
+```Java
+AtomicInteger num = new AtomicInteger();
+// 如果 num 值为 10，则设置为 20。底层是基于 CAS 原子操作实现，因此不会出现并发问题。
+num.compareAndSet(10, 20);
 
-- 其语义不足以确保递增操作的原子性，除非保证只有一个线程操作
+```
 
-##### 【2】 原子变量
+#### 2. 利用 CAS 实现计数器
 
+这是[Go并发编程之美-CAS操作](http://ifeve.com/go%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E4%B9%8B%E7%BE%8E-cas%E6%93%8D%E4%BD%9C/) 中的一个例子，通过 CAS 实现计数器，
+不对计数器变量加锁，而是通过 CAS + 无限循环的方式实现原子交换和重试。
 
-- https://coolshell.cn/articles/8239.html
-- http://www.drdobbs.com/lock-free-data-structures/184401865
+```
+package main
 
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+)
 
+var (
+	counter int32 //计数器
+	wg sync.WaitGroup //信号量
 
-### 五. Go 语言的并发编程
+)
 
+func main() {
+
+	threadNum := 10000
+
+	wg.Add(threadNum)
+
+    // 开启协程，
+	for i := 0; i < threadNum; i++ {
+		go incCounter(i)
+	}
+
+    // 等待结束
+	wg.Wait()
+	fmt.Println(counter)
+
+}
+
+func incCounter(index int) {
+
+	defer wg.Done()
+	spinNum := 0
+    // 无限循环，保证重试
+    // 当执行 CAS 前协程被调度了，会导致 CAS 失败，因此需要重试操作，保证最终执行一定成功
+	for {
+        // 原子操作
+		old := counter
+		ok := atomic.CompareAndSwapInt32(&counter, old, old + 1)
+
+		if ok {
+			break
+		} else {
+			spinNum++
+		}
+	}
+	fmt.Printf("thread,%d,spinnum,%d\n", index, spinNum)
+
+}
+```
+
+#### 3. 无锁容器
+
+引用自 [设计不使用互斥锁的并发数据结构](https://www.ibm.com/developerworks/cn/aix/library/au-multithreaded_structures2/index.html) 的例子：
+
+无锁堆栈的入栈操作：
+```C++
+void Stack<T>::push(const T& data) 
+{ 
+    Node *n = new Node(data); 
+    while (1) { 
+        n->next = top;
+        // 通过 CAS 完成栈顶的交换操作
+        if (__sync_bool_compare_and_swap(&top, n->next, n)) { // CAS
+            break;
+        }
+    }
+}
+```
+
+上面是无锁堆栈的入栈操作，这里没有使用所而是 CAS 操作，while 循环保证了 CAS 执行前线程被抢占时重试的操作，因此入栈是线程安全的。
+
+无锁堆栈的弹栈：
+
+```C++
+T Stack<T>::pop( ) 
+{ 
+    while (1) { 
+        Node* result = top;
+        if (result == NULL) 
+           throw std::string(“Cannot pop from empty stack”);      
+        if (top && __sync_bool_compare_and_swap(&top, result, result->next)) { // CAS
+            return top->data;
+        }
+    }
+}
+```
+依旧用 while 循环保证 CAS 执行前线程被抢走执行权的情况，保证弹栈操作最终执行完成。
+
+传统的加锁机制是一种悲观锁，一旦有资源需要修改，立即上锁，不允许别的线程再去占用该资源。而 CAS 是一种乐观锁机制，不给资源上锁，其他线程可以占用资源，但是自己在执行前每次都要判断一次，看是否有其他线程改动过资源。因此CAS 的使用一般都伴随着重试、循环，本质上是通过抢占 CPU 资源从而节省了锁带来的性能损耗，比如线程的上下文切换等。
 
 ***参考资料***
 
@@ -677,3 +777,4 @@ public class CopyOnWriteArrayList<E>
 - JDK 1.7、1.8 源码
 - [《Go 语言学习笔记》](https://book.douban.com/subject/26832468/)
 - [Effective Go](https://golang.org/doc/effective_go.html#concurrency)
+- [并发编程网](http://ifeve.com/)
